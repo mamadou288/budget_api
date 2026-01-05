@@ -1,9 +1,7 @@
-from django.contrib.auth import get_user_model
-from django.contrib.auth import authenticate
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-User = get_user_model()
+from .services import authenticate_by_email, create_user_account
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -13,32 +11,26 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
         email = attrs.get("email")
         password = attrs.get("password")
 
-        if not email or not password:
-            raise serializers.ValidationError("Email et mot de passe requis.")
-
-        user = authenticate(
-            request=self.context.get("request"),
-            username=email,
-            password=password,
-        )
-
+        user = authenticate_by_email(email=email, password=password)
         if user is None:
-            raise serializers.ValidationError("Identifiants invalides.")
+            raise serializers.ValidationError({"detail": "Identifiants invalides."})
 
-        return super().validate({"username": user.username, "password": password})
+        refresh = self.get_token(user)
+        return {"refresh": str(refresh), "access": str(refresh.access_token)}
 
 
-class RegisterSerializer(serializers.ModelSerializer):
+class RegisterSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    username = serializers.CharField(min_length=3, max_length=30)
     password = serializers.CharField(write_only=True, min_length=8)
-
-    class Meta:
-        model = User
-        fields = ("email", "password")
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
 
     def create(self, validated_data):
-        # create_user hash le password correctement
-        return User.objects.create_user(
-            username=validated_data["email"],  # utile même si tu n’exposes pas username
+        return create_user_account(
             email=validated_data["email"],
+            username=validated_data["username"],
             password=validated_data["password"],
+            first_name=validated_data.get("first_name", ""),
+            last_name=validated_data.get("last_name", ""),
         )
