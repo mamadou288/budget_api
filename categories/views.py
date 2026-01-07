@@ -15,6 +15,8 @@ class CategoryListCreateView(ListCreateAPIView):
             Q(user=self.request.user) | Q(user__isnull=True)
         )
 
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 class CategoryDetailView(RetrieveUpdateDestroyAPIView):
     serializer_class = CategorySerializer
